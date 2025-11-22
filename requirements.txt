@@ -1,8 +1,8 @@
 streamlit
 groq
+tiktoken
 faiss-cpu
 chromadb
-tiktoken
 numpy
 pandas
 python-dotenv
