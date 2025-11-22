@@ -1,6 +1,6 @@
 import streamlit as st
 import json
-from openai import OpenAI
+from groq import Groq
 
 # ---------------------------------------------------------
 # SYSTEM PROMPT (RAG-Enhanced IELTS/TOEFL/CEFR Examiner)
@@ -20,7 +20,7 @@ Your goals:
 1. Apply the official IELTS/TOEFL/CEFR rubrics exactly.
 2. Compare the student’s work with retrieved high-band model answers.
 3. Provide short, clear, actionable feedback.
-4. Prevent any hallucination—use only the provided data.
+4. Prevent hallucination—use only the provided data.
 
 Return your output ONLY in the following JSON structure:
 
@@ -59,36 +59,31 @@ Rules:
 - Avoid repeating suggestions.
 - Explain why each score was assigned.
 
-Evaluation Logic:
-1. Task Response — relevance, coverage, depth vs. model answers
-2. Coherence & Cohesion — logical flow, paragraphing, cohesive devices
-3. Lexical Resource — range, accuracy, collocations, repetition
-4. Grammatical Range & Accuracy — variety, errors, complexity
-
-Style:
-- Friendly, clear, professional tone.
-- Highlight strengths + 3–5 key improvements.
-- Avoid overwhelming the user with long text.
-
-Do not use any external knowledge.  
-Do not exceed the provided information.  
-Do not assign Band 9 without solid evidence.
+Do not use external knowledge.
+Do not assign Band 9 without strong justification.
 """
 
-# ---------------------------------------------------------
-# Streamlit UI Setup
-# ---------------------------------------------------------
-st.set_page_config(page_title="RAG Auto-Grader", layout="wide")
-st.title("📝 RAG-Based Intelligent Auto-Grader (IELTS/TOEFL/CEFR)")
-st.write("Paste your writing task and essay below to receive an AI-powered evaluation.")
 
 # ---------------------------------------------------------
-# API Setup (requires .streamlit/secrets.toml)
+# Streamlit UI Config
 # ---------------------------------------------------------
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+st.set_page_config(page_title="RAG IELTS Auto-Grader", layout="wide")
+st.title("📝 RAG-Based Intelligent Auto-Grader (Groq-Powered)")
+st.caption("Evaluates IELTS / TOEFL / CEFR writing tasks using Groq LLM + RAG.")
+
 
 # ---------------------------------------------------------
-# Placeholder RAG Function (replace with FAISS/Chroma)
+# Initialize Groq Client
+# ---------------------------------------------------------
+try:
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except KeyError:
+    st.error("❌ Missing GROQ_API_KEY in Streamlit Secrets.\n\nAdd it under: Settings → Secrets")
+    st.stop()
+
+
+# ---------------------------------------------------------
+# RAG Placeholder (Replace with vector DB later)
 # ---------------------------------------------------------
 def retrieve_model_answers(query):
     return [
@@ -101,7 +96,7 @@ def retrieve_model_answers(query):
 
 
 # ---------------------------------------------------------
-# Evaluation Function
+# Function to evaluate essay using Groq LLM
 # ---------------------------------------------------------
 def evaluate_essay(task_prompt, essay, exam_type):
     rag_results = retrieve_model_answers(essay)
@@ -114,7 +109,7 @@ def evaluate_essay(task_prompt, essay, exam_type):
     }
 
     response = client.chat.completions.create(
-        model="gpt-4.1",
+        model="mixtral-8x7b-32768",  # very fast + accurate on Groq
         temperature=0,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -128,29 +123,25 @@ def evaluate_essay(task_prompt, essay, exam_type):
 # ---------------------------------------------------------
 # Streamlit Input Fields
 # ---------------------------------------------------------
-exam_type = st.selectbox(
-    "Exam Type:",
-    ["IELTS Academic", "IELTS General Training", "TOEFL", "CEFR"]
-)
-
+exam_type = st.selectbox("Exam Type", ["IELTS Academic", "IELTS General Training", "TOEFL", "CEFR"])
 task_prompt = st.text_area("Task Prompt", height=140)
 essay = st.text_area("Your Essay", height=260)
 
+
 # ---------------------------------------------------------
-# Evaluate Button
+# Run Evaluation
 # ---------------------------------------------------------
 if st.button("Evaluate"):
     if not task_prompt or not essay:
-        st.error("Please fill in both the Task Prompt and Essay fields.")
+        st.error("⚠ Please enter both the Task Prompt and your Essay before evaluating.")
     else:
-        with st.spinner("Evaluating your essay..."):
+        with st.spinner("Evaluating using Groq..."):
             raw_output = evaluate_essay(task_prompt, essay, exam_type)
 
-        # Display Results
         try:
             result = json.loads(raw_output)
 
-            st.success("Evaluation Complete ✔")
+            st.success("✔ Evaluation Complete")
 
             col1, col2 = st.columns(2)
 
@@ -172,8 +163,7 @@ if st.button("Evaluate"):
             st.subheader("📚 RAG References Used")
             st.json(result["rag_references_used"])
 
-        except Exception as e:
-            st.error("Error parsing the model's response. Raw output shown below:")
+        except Exception:
+            st.error("⚠ The model returned non-JSON output.")
             st.code(raw_output)
-            st.exception(e)
 groq
